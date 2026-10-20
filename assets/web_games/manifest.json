@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "protocolVersion": 1,
-  "sourceSha": "dc923e7333d1d8266962c9dabbd537e5b11759f7",
+  "sourceSha": "d942dd2e59d9fdf2361ff9553bbdb4337f97adaf",
   "games": [
     {
       "id": "retro-hoops",
@@ -38,8 +38,8 @@
       "title": "RETRO INNINGS",
       "sport": "cricket",
       "path": "retro-innings/index.html",
-      "sha256": "fd46186b4d6fce72682a209475d905997cf2347a3d425a0de906a8300bdaf354",
-      "bytes": 1015077,
+      "sha256": "05f749526f447356c24120507d9605278a4d6ea88759ebebaac1e0f9be96e2e1",
+      "bytes": 1015070,
       "orientation": "landscape",
       "saveSchemaVersion": 1
     }
