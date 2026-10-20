@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 1,
+  "sourceSha": "45ab03cdb872a99e7b0fc94de23dd9fa200a5969",
+  "games": [
+    {
+      "id": "retro-hoops",
+      "title": "RETRO HOOPS",
+      "sport": "basketball",
+      "path": "retro-hoops/index.html",
+      "sha256": "ea6aafbaab139d9d722fef128244172cbb84be38c40620f5f1fee99b3d168aec",
+      "bytes": 1505703,
+      "orientation": "any",
+      "saveSchemaVersion": 1
+    },
+    {
+      "id": "retro-circuit",
+      "title": "RETRO CIRCUIT",
+      "sport": "motorsport",
+      "path": "retro-circuit/index.html",
+      "sha256": "77ddca5bc037f33c95f0fa941dd1ec82487d9bd4a349c850626d79a858cfdd94",
+      "bytes": 836027,
+      "orientation": "landscape",
+      "saveSchemaVersion": 1
+    },
+    {
+      "id": "retro-football",
+      "title": "RETRO FOOTBALL",
+      "sport": "football",
+      "path": "retro-football/index.html",
+      "sha256": "47dca09d14ecf1a19d838adba9e3d3411467b262360ec8f4d636f0753b2ad54a",
+      "bytes": 2339330,
+      "orientation": "landscape",
+      "saveSchemaVersion": 1
+    },
+    {
+      "id": "retro-innings",
+      "title": "RETRO INNINGS",
+      "sport": "cricket",
+      "path": "retro-innings/index.html",
+      "sha256": "1acf875a43618cac77f30d0f6173a8a6db4abdde26d98cd5563678b286b5564a",
+      "bytes": 1014969,
+      "orientation": "landscape",
+      "saveSchemaVersion": 1
+    }
+  ]
+}

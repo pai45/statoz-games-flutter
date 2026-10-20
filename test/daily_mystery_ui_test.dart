@@ -1,0 +1,581 @@
+import 'package:card_game/blocs/guess_driver/guess_driver_cubit.dart';
+import 'package:card_game/blocs/game/game_bloc.dart';
+import 'package:card_game/blocs/guess_winner/guess_winner_cubit.dart';
+import 'package:card_game/config/theme.dart';
+import 'package:card_game/models/guess_driver.dart';
+import 'package:card_game/models/guess_winner.dart';
+import 'package:card_game/screens/guess_driver/guess_driver_home_screen.dart';
+import 'package:card_game/screens/guess_driver/guess_driver_screen.dart';
+import 'package:card_game/screens/guess_winner/guess_winner_home_screen.dart';
+import 'package:card_game/screens/guess_winner/guess_winner_logs_screen.dart';
+import 'package:card_game/screens/guess_winner/guess_winner_screen.dart';
+import 'package:card_game/services/secure_storage_service.dart';
+import 'package:card_game/utils/sound_effects.dart';
+import 'package:card_game/widgets/cyber/daily_mystery_widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const _slam = GrandSlamCard(
+  year: '2025',
+  tournament: 'Wimbledon',
+  category: 'Men Singles',
+  winnerName: 'Carlos Alcaraz',
+);
+
+const _race = F1RaceCard(
+  year: '2025',
+  trackName: 'Silverstone',
+  driverName: 'Lando Norris',
+  teamName: 'McLaren',
+  country: 'United Kingdom',
+);
+
+Future<void> _pumpAt(
+  WidgetTester tester,
+  Widget child, {
+  Size size = const Size(393, 852),
+  double textScale = 1,
+  double keyboardInset = 0,
+  bool reducedMotion = false,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.darkTheme,
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: size,
+          textScaler: TextScaler.linear(textScale),
+          viewInsets: EdgeInsets.only(bottom: keyboardInset),
+          disableAnimations: reducedMotion,
+        ),
+        child: RepaintBoundary(
+          key: const ValueKey('daily-mystery-qa-surface'),
+          child: child,
+        ),
+      ),
+    ),
+  );
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    await (FontLoader('Orbitron')..addFont(
+          rootBundle.load('assets/fonts/Orbitron-VariableFont_wght.ttf'),
+        ))
+        .load();
+    await (FontLoader('Space Grotesk')
+          ..addFont(rootBundle.load('assets/fonts/SpaceGrotesk-VariableFont_wght.ttf')))
+        .load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+  });
+
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({});
+    AudioController.debugUseBackend(_NoopAudioBackend());
+    AudioController.instance.muted.value = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+  });
+
+  tearDown(() {
+    AudioController.instance.muted.value = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+
+  testWidgets(
+    'tennis landing uses cyber telemetry, stats, and spacious actions',
+    (tester) async {
+      final storage = SecureGameStorage();
+      await storage.saveTennisGuessWinnerArchive(
+        const GuessWinnerArchive(
+          resultsByDay: {
+            '2026-07-18': GuessWinnerDailyResult(
+              won: true,
+              heartsRemaining: 8,
+              targetWinnerName: 'Carlos Alcaraz',
+            ),
+            '2026-07-17': GuessWinnerDailyResult(
+              won: false,
+              heartsRemaining: 0,
+              targetWinnerName: 'Aryna Sabalenka',
+            ),
+          },
+        ),
+      );
+      final cubit = GuessWinnerCubit(
+        grandSlams: const [_slam],
+        allPlayers: const ['Carlos Alcaraz', 'Wrong Player'],
+        storage: storage,
+        now: () => DateTime(2026, 7, 19, 12),
+      );
+      addTearDown(cubit.close);
+      await cubit.load();
+
+      await _pumpAt(
+        tester,
+        GuessWinnerHomeScreen(
+          state: cubit.state,
+          onBack: () {},
+          onOpenToday: () {},
+          onOpenLogs: () {},
+          onRetry: () {},
+          now: () => DateTime(2026, 7, 19, 12),
+        ),
+        size: const Size(360, 640),
+        textScale: 1.15,
+        reducedMotion: true,
+      );
+
+      expect(find.text('COURT ARCHIVE // ONLINE'), findsOneWidget);
+      expect(find.text('ENCRYPTED CHAMPION'), findsOneWidget);
+      expect(find.text('PLAY TODAY\'S FINAL'), findsOneWidget);
+      expect(find.text('OPEN 30-DAY ARCHIVE'), findsOneWidget);
+      expect(find.text('50%'), findsOneWidget);
+      expect(find.text('8'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await expectLater(
+        find.byKey(const ValueKey('daily-mystery-qa-surface')),
+        matchesGoldenFile('goldens/daily_mystery_tennis_landing.png'),
+      );
+    },
+  );
+
+  testWidgets('F1 case dossier keeps the race identity and primary CTA', (
+    tester,
+  ) async {
+    final cubit = GuessDriverCubit(
+      races: const [_race],
+      allDrivers: const ['Lando Norris', 'Wrong Driver'],
+      storage: SecureGameStorage(),
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    addTearDown(cubit.close);
+    await cubit.load();
+
+    await _pumpAt(
+      tester,
+      GuessDriverHomeScreen(
+        state: cubit.state,
+        onBack: () {},
+        onOpenToday: () {},
+        onOpenLogs: () {},
+        onRetry: () {},
+        now: () => DateTime(2026, 7, 19, 12),
+      ),
+      reducedMotion: true,
+    );
+
+    expect(find.text('MOTORSPORT // DAILY INTEL'), findsOneWidget);
+    expect(find.text('GUESS THE DRIVER'), findsWidgets);
+    expect(find.text('NEW CASE'), findsOneWidget);
+    expect(find.text('10 HEARTS TO SOLVE'), findsOneWidget);
+    expect(find.text('BEST HEARTS'), findsOneWidget);
+    expect(find.text('PLAY TODAY\'S RACE'), findsOneWidget);
+    expect(find.text('OPEN 30-DAY ARCHIVE'), findsOneWidget);
+    expect(find.byKey(const ValueKey('guess-driver-today')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('daily-mystery-qa-surface')),
+      matchesGoldenFile('goldens/daily_mystery_f1_landing.png'),
+    );
+  });
+
+  testWidgets('F1 dossier shows resume and completed review states', (
+    tester,
+  ) async {
+    final cubit = GuessDriverCubit(
+      races: const [_race],
+      allDrivers: const ['Lando Norris', 'Wrong Driver'],
+      storage: SecureGameStorage(),
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    addTearDown(cubit.close);
+    await cubit.load();
+    final ready = cubit.state;
+    for (final (state, status, action, resource) in [
+      (
+        ready.copyWith(guesses: const ['Wrong Driver'], remainingHearts: 9),
+        'IN PROGRESS',
+        'RESUME CHALLENGE',
+        '9 HEARTS TO SOLVE',
+      ),
+      (
+        ready.copyWith(
+          archive: const GuessDriverArchive(
+            resultsByDay: {
+              '2026-07-19': GuessDriverDailyResult(
+                won: true,
+                heartsRemaining: 7,
+                targetDriverName: 'Lando Norris',
+              ),
+            },
+          ),
+        ),
+        'SOLVED TODAY',
+        'REVIEW TODAY\'S RACE',
+        '7 HEARTS LEFT',
+      ),
+    ]) {
+      await _pumpAt(
+        tester,
+        GuessDriverHomeScreen(
+          state: state,
+          onBack: () {},
+          onOpenToday: () {},
+          onOpenLogs: () {},
+          onRetry: () {},
+          now: () => DateTime(2026, 7, 19, 12),
+        ),
+        size: const Size(320, 640),
+        textScale: 1.4,
+        reducedMotion: true,
+      );
+      expect(find.text(status), findsOneWidget);
+      expect(find.text(action), findsOneWidget);
+      expect(find.text(resource), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
+    'driver play selection depletes a heart and adds a numbered log',
+    (tester) async {
+      final cubit = GuessDriverCubit(
+        races: const [_race],
+        allDrivers: const ['Lando Norris', 'Wrong Driver'],
+        storage: SecureGameStorage(),
+        now: () => DateTime(2026, 7, 19, 12),
+      );
+      final gameBloc = GameBloc(SecureGameStorage());
+      addTearDown(cubit.close);
+      addTearDown(gameBloc.close);
+      await cubit.load();
+      await cubit.openToday();
+
+      await _pumpAt(
+        tester,
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<GuessDriverCubit>.value(value: cubit),
+            BlocProvider<GameBloc>.value(value: gameBloc),
+          ],
+          child: GuessDriverScreen(onBack: () {}),
+        ),
+      );
+
+      expect(find.text('SKIP ROUND'), findsOneWidget);
+      expect(find.text('YEAR'), findsOneWidget);
+      expect(find.text('TRACK'), findsOneWidget);
+      expect(find.text('COUNTRY'), findsOneWidget);
+      expect(find.text('TEAM'), findsOneWidget);
+      expect(find.text('25 COINS'), findsOneWidget);
+      for (var index = 0; index < 10; index++) {
+        expect(
+          find.byKey(ValueKey('daily-mystery-heart-$index')),
+          findsOneWidget,
+        );
+      }
+      await tester.enterText(find.byType(TextField), 'Wrong');
+      await tester.pump();
+      await tester.tap(find.text('Wrong Driver').last);
+      await tester.pump();
+      expect(find.text('LOCK DRIVER'), findsOneWidget);
+
+      await tester.tap(find.text('LOCK DRIVER'));
+      await tester.pump(const Duration(milliseconds: 450));
+
+      expect(cubit.state.remainingHearts, 9);
+      expect(find.text('1 · WRONG DRIVER'), findsOneWidget);
+      expect(find.text('9 / 10'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('team hint spends 25 coins and reveals the team', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final cubit = GuessDriverCubit(
+      races: const [_race],
+      allDrivers: const ['Lando Norris'],
+      storage: SecureGameStorage(),
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    final gameBloc = GameBloc(SecureGameStorage());
+    gameBloc.emit(gameBloc.state.copyWith(coins: 25));
+    addTearDown(cubit.close);
+    addTearDown(gameBloc.close);
+    await cubit.load();
+    await cubit.openToday();
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<GuessDriverCubit>.value(value: cubit),
+          BlocProvider<GameBloc>.value(value: gameBloc),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: GuessDriverScreen(onBack: () {}),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('25 COINS'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('UNLOCK TEAM INTEL?'), findsOneWidget);
+    await tester.tap(find.text('SPEND 25 >'));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(cubit.state.teamHintRevealed, isTrue);
+    expect(find.text('MCLAREN'), findsOneWidget);
+    expect(gameBloc.state.coins, 0);
+    expect(
+      gameBloc.state.coinLedger.any(
+        (entry) => entry.source.name == 'guessDriverHint',
+      ),
+      isTrue,
+    );
+    expect(cubit.state.remainingHearts, GuessDriverCubit.maxHearts);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('team hint blocks low funds and respects cancellation', (
+    tester,
+  ) async {
+    final cubit = GuessDriverCubit(
+      races: const [_race],
+      allDrivers: const ['Lando Norris'],
+      storage: SecureGameStorage(),
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    final gameBloc = GameBloc(SecureGameStorage());
+    addTearDown(cubit.close);
+    addTearDown(gameBloc.close);
+    await cubit.load();
+    await cubit.openToday();
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<GuessDriverCubit>.value(value: cubit),
+          BlocProvider<GameBloc>.value(value: gameBloc),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: GuessDriverScreen(onBack: () {}),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('25 COINS'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('COINS REQUIRED'), findsOneWidget);
+    await tester.tap(find.text('CLOSE'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(cubit.state.teamHintRevealed, isFalse);
+    expect(gameBloc.state.coins, 0);
+
+    gameBloc.emit(gameBloc.state.copyWith(coins: 25));
+    await tester.pump();
+    await tester.tap(find.text('25 COINS'));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.tap(find.text('KEEP COINS'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(cubit.state.teamHintRevealed, isFalse);
+    expect(gameBloc.state.coins, 25);
+  });
+
+  testWidgets('winner play remains usable on a short keyboard-open screen', (
+    tester,
+  ) async {
+    final cubit = GuessWinnerCubit(
+      grandSlams: const [_slam],
+      allPlayers: const ['Carlos Alcaraz', 'Wrong Player'],
+      storage: SecureGameStorage(),
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    addTearDown(cubit.close);
+    await cubit.load();
+    await cubit.openToday();
+
+    await _pumpAt(
+      tester,
+      BlocProvider<GuessWinnerCubit>.value(
+        value: cubit,
+        child: GuessWinnerScreen(onBack: () {}),
+      ),
+      size: const Size(360, 640),
+      textScale: 1.2,
+      keyboardInset: 250,
+      reducedMotion: true,
+    );
+
+    expect(find.text('SKIP ROUND'), findsOneWidget);
+    expect(find.text('TOURNAMENT'), findsOneWidget);
+    expect(find.text('CATEGORY'), findsOneWidget);
+    await tester.tap(find.text('SKIP ROUND'));
+    await tester.pump();
+    expect(cubit.state.gameState, GuessWinnerGameState.lost);
+    expect(cubit.state.guesses, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('30-day archive reports live, won, lost, and missing days', (
+    tester,
+  ) async {
+    final storage = SecureGameStorage();
+    await storage.saveTennisGuessWinnerArchive(
+      const GuessWinnerArchive(
+        resultsByDay: {
+          '2026-07-18': GuessWinnerDailyResult(
+            won: true,
+            heartsRemaining: 8,
+            targetWinnerName: 'Carlos Alcaraz',
+          ),
+          '2026-07-17': GuessWinnerDailyResult(
+            won: false,
+            heartsRemaining: 0,
+            targetWinnerName: 'Carlos Alcaraz',
+          ),
+        },
+      ),
+    );
+    final cubit = GuessWinnerCubit(
+      grandSlams: const [_slam],
+      allPlayers: const ['Carlos Alcaraz'],
+      storage: storage,
+      now: () => DateTime(2026, 7, 19, 12),
+    );
+    addTearDown(cubit.close);
+    await cubit.load();
+    var openedDay = '';
+
+    await _pumpAt(
+      tester,
+      BlocProvider<GuessWinnerCubit>.value(
+        value: cubit,
+        child: GuessWinnerLogsScreen(
+          state: cubit.state,
+          onBack: () {},
+          onOpenDay: (dayKey) async => openedDay = dayKey,
+        ),
+      ),
+      size: const Size(820, 900),
+      reducedMotion: true,
+    );
+
+    expect(find.text('TODAY · LIVE'), findsOneWidget);
+    expect(find.text('WON'), findsOneWidget);
+    expect(find.text('LOST'), findsOneWidget);
+    expect(find.text('NO ENTRY'), findsWidgets);
+    expect(find.text('2'), findsOneWidget);
+    await expectLater(
+      find.byKey(const ValueKey('daily-mystery-qa-surface')),
+      matchesGoldenFile('goldens/daily_mystery_tennis_archive.png'),
+    );
+    await tester.tap(find.text('WON'));
+    await tester.pump();
+    expect(openedDay, '2026-07-18');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('historical debrief renders immediately without reward replay', (
+    tester,
+  ) async {
+    var consumed = false;
+    await _pumpAt(
+      tester,
+      DailyMysteryDebrief(
+        title: 'CHAMPION DEBRIEF',
+        subtitle: '2026-07-18',
+        won: true,
+        freshResult: false,
+        answer: 'Carlos Alcaraz',
+        promptTitle: 'Wimbledon · 2025',
+        promptDetail: 'Men Singles',
+        heartsRemaining: 8,
+        icon: Icons.sports_tennis_rounded,
+        accent: Cyber.lime,
+        onHome: () {},
+        onLogs: () {},
+        onConsumeReveal: () => consumed = true,
+      ),
+      reducedMotion: true,
+    );
+
+    expect(find.text('IDENTITY CONFIRMED'), findsOneWidget);
+    expect(find.text('CARLOS ALCARAZ'), findsOneWidget);
+    expect(find.text('+50 XP'), findsOneWidget);
+    expect(consumed, isFalse);
+    expect(tester.takeException(), isNull);
+    await expectLater(
+      find.byKey(const ValueKey('daily-mystery-qa-surface')),
+      matchesGoldenFile('goldens/daily_mystery_debrief.png'),
+    );
+  });
+}
+
+class _NoopAudioBackend implements AudioPlaybackBackend {
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<void> playEffect(
+    String assetPath, {
+    required AudioBus bus,
+    required double volume,
+  }) async {}
+
+  @override
+  Future<void> preload(List<String> assetPaths) async {}
+
+  @override
+  Future<void> setAmbienceVolume(double volume) async {}
+
+  @override
+  Future<void> setDynamicLoop({
+    required double volume,
+    required double rate,
+  }) async {}
+
+  @override
+  Future<void> startAmbience(
+    String assetPath, {
+    required double volume,
+  }) async {}
+
+  @override
+  Future<void> startDynamicLoop(
+    String assetPath, {
+    required double volume,
+  }) async {}
+
+  @override
+  Future<void> stopAll() async {}
+
+  @override
+  Future<void> stopAmbience() async {}
+
+  @override
+  Future<void> stopDynamicLoop() async {}
+}

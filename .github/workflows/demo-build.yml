@@ -1,0 +1,59 @@
+name: Build Flutter demo
+run-name: ${{ inputs.release_request_id && format('Designer release {0}', inputs.release_request_id) || github.event.head_commit.message || 'Demo build' }}
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Reviewed main commit
+        required: false
+        type: string
+      release_request_id:
+        description: Designer request ID
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: demo-games_flutter-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Verify reviewed revision
+        env:
+          REVIEWED_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [ -n "$REVIEWED_SHA" ]; then
+            [[ "$REVIEWED_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 1
+            test "$(git rev-parse HEAD)" = "$REVIEWED_SHA"
+          fi
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-pub lib/config lib/app.dart lib/widgets/landing_bottom_navigation.dart lib/screens/predictions/prediction_home_screen.dart lib/services/secure_storage_service.dart lib/screens/web_games
+      - run: flutter test --no-pub test/demo_split_test.dart
+      - run: flutter build web --release --no-web-resources-cdn --no-wasm-dry-run --base-href /statoz-games-flutter/
+      - name: Write build identity
+        run: |
+          python3 - <<'PY'
+          import datetime, json, pathlib, subprocess
+          manifest = {"schemaVersion": 1, "appId": "games_flutter", "sourceSha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(), "buildId": "${{ github.run_id }}-${{ github.run_attempt }}", "builtAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"), "basePath": "/statoz-games-flutter"}
+          pathlib.Path("build/web/release-manifest.json").write_text(json.dumps(manifest))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: statoz-games_flutter-static
+          path: build/web
+          if-no-files-found: error
+          retention-days: 30

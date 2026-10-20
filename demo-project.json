@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "statoz-games-flutter",
+  "product": "games",
+  "framework": "flutter",
+  "demoOnly": true,
+  "repository": "pai45/statoz-games-flutter",
+  "sourceRepository": "pai45/flutter-card-game",
+  "sourceSha": "78333df4eedb18ab41ee9e788c3bd30b228c441a",
+  "capturedAt": "2026-10-20T04:41:38.289Z",
+  "snapshotSha256": "d35d4c4a0e70db53657a5df3a41ca3365de115ef6c395b08b734e9ae0cae7b94",
+  "assets": "temporary demo assets; replacement planned; original rights and provenance retained",
+  "splitVersion": 1
+}

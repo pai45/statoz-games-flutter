@@ -1,0 +1,154 @@
+import '../../data/favorite_team_matcher.dart';
+import '../../models/league.dart';
+import '../../models/prediction.dart';
+import '../../models/sport_match.dart';
+import '../../models/team_standing.dart';
+
+class PredictionState {
+  const PredictionState({
+    this.loading = true,
+    this.leagues = const [],
+    this.fixtures = const [],
+    this.predictions = const {},
+    this.standingsByLeague = const {},
+    this.quizzes = const {},
+    this.questionIntel = const {},
+    this.loadedSports = const {},
+    this.loadingSports = const {},
+    this.followedLeagueIds = const [],
+    this.favoriteTeams = const {},
+  });
+
+  final bool loading;
+  final Set<Sport> loadedSports;
+  final Set<Sport> loadingSports;
+  final List<League> leagues;
+  final List<SportMatch> fixtures;
+
+  /// matchId → the user's prediction for that fixture.
+  final Map<String, UserPrediction> predictions;
+
+  /// leagueId → that league's rank-sorted standings table.
+  final Map<String, List<TeamStanding>> standingsByLeague;
+
+  /// quiz key (matchId::quizId) → PredictionQuiz
+  final Map<String, PredictionQuiz> quizzes;
+
+  /// matchId::quizId::questionId → latest ESPN-derived status for a locked
+  /// prediction question. Crowd percentages remain repository-backed.
+  final Map<String, LiveQuestionIntel> questionIntel;
+
+  /// Leagues the player followed during onboarding (or from the profile's
+  /// clubs editor), in the order they were stored.
+  final List<String> followedLeagueIds;
+
+  /// leagueId → the player's favourite team id in that league. Empty when the
+  /// player skipped the clubs step.
+  final Map<String, String> favoriteTeams;
+
+  /// The side of [match] that is one of the player's clubs, or null.
+  ///
+  /// Delegates to [favoriteSideOf], which matches on team identity scoped by
+  /// sport — the existing [fixturesForTeam] below is NOT a substitute, since it
+  /// assumes exact league + team ids that live ESPN fixtures do not carry.
+  FavoriteSide? favoriteSideFor(SportMatch match) =>
+      favoriteTeams.isEmpty ? null : favoriteSideOf(match, favoriteTeams);
+
+  bool isFavoriteMatch(SportMatch match) => favoriteSideFor(match) != null;
+
+  /// Fixtures grouped under their league, preserving league order.
+  Map<League, List<SportMatch>> get fixturesByLeague {
+    final grouped = <League, List<SportMatch>>{};
+    for (final league in leagues) {
+      final matches = fixtures.where((m) => m.leagueId == league.id).toList();
+      if (matches.isNotEmpty) grouped[league] = matches;
+    }
+    return grouped;
+  }
+
+  int get predictionsMade => predictions.length;
+
+  int get correctPredictions => predictions.values
+      .where((p) => p.status == PredictionStatus.settled)
+      .fold(0, (sum, p) => sum + (p.correctCount ?? 0));
+
+  League? leagueFor(String leagueId) {
+    for (final league in leagues) {
+      if (league.id == leagueId) return league;
+    }
+    return null;
+  }
+
+  UserPrediction? predictionFor(
+    String matchId, [
+    String quizId = kDefaultPredictionQuizId,
+  ]) => predictions[predictionStorageKey(matchId, quizId)];
+
+  List<UserPrediction> predictionsForMatch(String matchId) => predictions.values
+      .where((prediction) => prediction.matchId == matchId)
+      .toList(growable: false);
+
+  UserPrediction? predictionSummaryForMatch(String matchId) {
+    final items = predictionsForMatch(matchId);
+    if (items.isEmpty) return null;
+    items.sort((a, b) {
+      final statusRank = _summaryStatusRank(
+        b.status,
+      ).compareTo(_summaryStatusRank(a.status));
+      if (statusRank != 0) return statusRank;
+      return b.submittedAt.compareTo(a.submittedAt);
+    });
+    return items.first;
+  }
+
+  /// Rank-sorted standings for a league (empty if not loaded).
+  List<TeamStanding> standingsFor(String leagueId) =>
+      standingsByLeague[leagueId] ?? const [];
+
+  /// Fixtures in [leagueId] that involve [teamId] (home or away).
+  List<SportMatch> fixturesForTeam(String leagueId, String teamId) => fixtures
+      .where(
+        (m) =>
+            m.leagueId == leagueId &&
+            (m.home.id == teamId || m.away.id == teamId),
+      )
+      .toList();
+
+  PredictionState copyWith({
+    bool? loading,
+    Set<Sport>? loadedSports,
+    Set<Sport>? loadingSports,
+    List<League>? leagues,
+    List<SportMatch>? fixtures,
+    Map<String, UserPrediction>? predictions,
+    Map<String, List<TeamStanding>>? standingsByLeague,
+    Map<String, PredictionQuiz>? quizzes,
+    Map<String, LiveQuestionIntel>? questionIntel,
+    List<String>? followedLeagueIds,
+    Map<String, String>? favoriteTeams,
+  }) => PredictionState(
+    loading: loading ?? this.loading,
+    loadedSports: loadedSports ?? this.loadedSports,
+    loadingSports: loadingSports ?? this.loadingSports,
+    leagues: leagues ?? this.leagues,
+    fixtures: fixtures ?? this.fixtures,
+    predictions: predictions ?? this.predictions,
+    standingsByLeague: standingsByLeague ?? this.standingsByLeague,
+    quizzes: quizzes ?? this.quizzes,
+    questionIntel: questionIntel ?? this.questionIntel,
+    followedLeagueIds: followedLeagueIds ?? this.followedLeagueIds,
+    favoriteTeams: favoriteTeams ?? this.favoriteTeams,
+  );
+}
+
+String predictionQuestionIntelKey(
+  String matchId,
+  String quizId,
+  String questionId,
+) => '$matchId::$quizId::$questionId';
+
+int _summaryStatusRank(PredictionStatus status) => switch (status) {
+  PredictionStatus.open => 1,
+  PredictionStatus.locked => 2,
+  PredictionStatus.settled => 3,
+};
