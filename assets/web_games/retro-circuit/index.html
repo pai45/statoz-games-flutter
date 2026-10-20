@@ -8,6 +8,7 @@
  const save=()=>emit('save',{schemaVersion:1,stores,resultIds});
  const storage={getItem:key=>Object.hasOwn(stores,key)?stores[key]:null,setItem(key,value){const next={...stores,[key]:String(value)};if(JSON.stringify(next).length>524288)throw new DOMException('Save limit exceeded','QuotaExceededError');stores=next;save();},removeItem(key){delete stores[key];save();},clear(){stores={};save();},key:index=>Object.keys(stores)[index]??null,get length(){return Object.keys(stores).length;}};
  Object.defineProperty(window,'localStorage',{value:storage,configurable:false});
+ window.__STATOZ_MESSAGE_ORIGIN__=parent===window?location.origin:(boot.origin||location.origin);
  const originalPost=window.postMessage.bind(window);window.postMessage=(message,target,transfer)=>originalPost(message,target==='null'?'*':target,transfer);
  const api={emit,save,sessionId,command:null,result(payload){const id=String(payload?.id||payload?.sessionId||'');if(!id||resultIds.includes(id))return;resultIds=[...resultIds,id].slice(-1000);let records=[];try{records=JSON.parse(stores['statoz.bundle.results']||'[]');}catch{}stores['statoz.bundle.results']=JSON.stringify([...records,payload].slice(-20));save();emit('result',payload);}};
  window.__STATOZ_HOST__=api;
