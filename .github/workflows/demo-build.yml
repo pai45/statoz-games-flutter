@@ -16,6 +16,8 @@ on:
         type: string
 permissions:
   contents: read
+  pages: write
+  id-token: write
 concurrency:
   group: demo-games_flutter-${{ github.ref }}
   cancel-in-progress: false
@@ -41,8 +43,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze --no-pub lib/config lib/app.dart lib/widgets/landing_bottom_navigation.dart lib/screens/predictions/prediction_home_screen.dart lib/services/secure_storage_service.dart lib/screens/web_games
-      - run: flutter test --no-pub test/demo_split_test.dart
+      - run: flutter analyze --no-pub
+      - run: flutter test --no-pub test/games_web_config_test.dart
       - run: flutter build web --release --no-web-resources-cdn --no-wasm-dry-run --base-href /statoz-games-flutter/
       - name: Write build identity
         run: |
@@ -57,3 +59,17 @@ jobs:
           path: build/web
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: build/web
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        id: deployment

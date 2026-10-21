@@ -272,3 +272,5 @@ Use one row per coherent request, not one row per file.
 | 2026-10-18 | Kickoff clock typography | Match discovery | BUILT | Reduced upcoming kickoff clocks to 16px / Space Grotesk 500 in app and web using existing title-size tokens. | discovery-card-library.md | Scoped analysis and presentation checks. |
 
 | 2026-10-20 | Create independent games demo; split catalog/navigation/storage and app identity | demo-split.md, README.md | game_ladder.dart, app.dart; validation pending |
+
+| 2026-10-21 | Replace Flutter product with complete hosted games web app | `README.md`; `systems/web-games-host.md` | BUILT / former Flutter implementation DEPRECATED | Removed the standalone Flutter feature implementation and made the published `statoz-games-web` product the app's only full-screen experience on native and web. | `lib/main.dart`, `lib/src/games_web_config.dart`, `lib/src/games_web_host_native.dart`, `lib/src/games_web_host_web.dart` | `flutter analyze`, `flutter test`, `flutter build web`, running-host verification. |

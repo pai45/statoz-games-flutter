@@ -1,11 +1,29 @@
-# StatOz Games — Flutter demo
+# StatOz Games — Flutter host
 
-Independent demo/UI-reference project copied from local pai45/flutter-card-game at 78333df4eedb18ab41ee9e788c3bd30b228c441a, including reviewed local work. Original checkout is unchanged. No shared account service, cloud synchronization, payments or production commerce.
+This project is now a minimal Flutter container for the complete StatOz Games
+web application:
 
-Sports arcade games; excludes matches, picks, quizzes, Bingo and guessing modes.
+`https://pai45.github.io/statoz-games-web/`
 
-Player data starts fresh and stays local to this app. Existing placeholder modes retain that status. See ASSET-REPLACEMENTS.md for temporary artwork and original provenance.
+The former standalone Flutter product implementation has been removed. The web
+project owns the product UI, games, navigation, persistence, and release. This
+repository owns only the native/web container, same-origin navigation policy,
+loading/error fallback, and platform packaging.
 
-Use Flutter matching the source toolchain. Run `flutter pub get`, `flutter analyze`, `flutter test`, and `flutter build web --base-href /statoz-games-flutter/`. Android outputs are development builds; iOS verification requires an Apple toolchain.
+## Run
 
-Only this repository may be changed by its scripts. Never run synchronization against the original card_game or statoz_web folders.
+```powershell
+flutter pub get
+flutter run
+```
+
+The host requires a network connection. Android already declares the Internet
+permission; iOS uses the HTTPS GitHub Pages origin without an ATS exception.
+
+## Verify
+
+```powershell
+flutter analyze
+flutter test
+flutter build web
+```
